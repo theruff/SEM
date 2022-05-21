@@ -5,31 +5,43 @@ using System.Text;
 
 namespace CompressionMethods
 {
+    struct CodeNode
+    {
+        public uint huffCode;
+        public byte lenght;
+        public CodeNode(uint _huffCode, byte _length)
+        {
+            this.huffCode = _huffCode;
+            this.lenght = _length;
+        }
+        public override string ToString()
+        {
+            string code = "";
+            for (int i = lenght - 1; i >= 0; i--)
+                code += (huffCode >> i & 1);
+            return code;
+        }
+    }
     class Leave : IComparable<Leave>
     {
         private uint frequency;
         private byte character;
         private ushort leftChild;
         private ushort rightChild;
-        public Leave(uint _frequency, byte _character)
+        public Leave(uint _freq, byte _character, ushort _leftChild, ushort _rightChild)
         {
-            frequency = _frequency;
+            frequency = _freq;
             character = _character;
-            leftChild = 0;
-            rightChild = 0;
-        }
-        public Leave(uint _frequency, ushort _leftChild, ushort _rightChild)
-        {
-            frequency = _frequency;
-            character = (byte)'~';
             leftChild = _leftChild;
             rightChild = _rightChild;
         }
+        public Leave(byte _character, ushort _leftChild, ushort _rightChild) : this(0, _character, _leftChild, _rightChild) { }
+        public Leave(uint _frequency, byte _character) : this(_frequency, _character, 0, 0) { }
+        public Leave(uint _frequency, ushort _leftChild, ushort _rightChild) : this(_frequency, (byte)'~', _leftChild, _rightChild) { }
         public uint Frequency { get => frequency; }
         public ushort LeftChild { get => leftChild; }
         public ushort RightChild { get => rightChild; }
         public byte Character { get => character; }
-
         public bool isSymbol() => leftChild == rightChild ? true : false;
         public int CompareTo([AllowNull] Leave other)
         {
@@ -43,57 +55,86 @@ namespace CompressionMethods
         public override string ToString()
         {
             if (leftChild == 0 && rightChild == 0)
-                return frequency.ToString() + "-" + character + "_" + leftChild.ToString() + rightChild.ToString();
+            {
+                if (character < 32)
+                    return "'" + character + "'-" + frequency.ToString() + "_L:" + leftChild.ToString() + "*R:" + rightChild.ToString();
+                else
+                    return (char)character + "-" + frequency.ToString() + "_L:" + leftChild.ToString() + "*R:" + rightChild.ToString();
+            }
             else
-                return frequency.ToString() + "-" + ":O:_" + leftChild.ToString() + rightChild.ToString(); ;
-            return base.ToString();
+                return "!0!-" + frequency.ToString() + "_L:" + leftChild.ToString() + "*R:" + rightChild.ToString();
         }
     }
     class Tree
     {
         private List<Leave> tree;
-        private ushort pointer;
-        private Dictionary<byte, string> alphabet;
+        private ushort pointer = 0;
+        private Dictionary<byte, CodeNode> alphabet;
+        internal List<Leave> leaves { get => tree; }
+        public Tree()
+        {
+            tree = new List<Leave>();
+        }
         public Tree(byte[] bytes)
         {
-            pointer = 0;
+            tree = new List<Leave>();
+            alphabet = new Dictionary<byte, CodeNode>();
+            treePrefill(bytes);
+            makeTree();
+        }
+        public void treePrefill(byte[] bytes)
+        {
             uint[] probabilityTable = new uint[256];
             foreach (byte b in bytes)
                 probabilityTable[b] += 1;
-            tree = new List<Leave>();
-            alphabet = new Dictionary<byte, string>();
+
             for (int i = 0; i < probabilityTable.Length; i++)
-            {
                 if (probabilityTable[i] > 0)
                     tree.Add(new Leave(probabilityTable[i], (byte)i));
-            }
             tree.Sort();
         }
-        public void makeTree()
+        private void makeTree()
         {
+            if (tree.Count == 1)
+                tree.Add(new Leave(tree[0].Frequency, (byte)(byte.MaxValue - (int)tree[0].Character)));
             while (pointer + 1 < tree.Count)
             {
-                tree.Add(new Leave(tree[pointer].Frequency + tree[pointer + 1].Frequency, pointer, (ushort)(pointer + 1)));
-                tree.Sort();
+                insertLeave(new Leave(tree[pointer].Frequency + tree[pointer + 1].Frequency, pointer, (ushort)(pointer + 1)));
                 pointer += 2;
             }
         }
-        private void treeBypass(ushort leaveId, string elementCode)
+        private void insertLeave(Leave leave)
         {
-            if (tree[leaveId].isSymbol())
-                alphabet.Add(tree[leaveId].Character, elementCode);
-            else
-            {
-                treeBypass(tree[leaveId].LeftChild, elementCode + "0");
-                treeBypass(tree[leaveId].RightChild, elementCode + "1");
-            }
+            for (int i = pointer; i < tree.Count; i++)
+                if (leave.Frequency < tree[i].Frequency)
+                {
+                    tree.Insert(i, leave);
+                    return;
+                }
+            tree.Add(leave);
         }
-        public Dictionary<byte, string> getAlphabet()
+        public Dictionary<byte, CodeNode> generateAlphabet()
         {
-            treeBypass((ushort)(tree.Count - 1), "");
+            treeBypass((ushort)(tree.Count - 1), new CodeNode());
             return alphabet;
         }
-        public BitWriter serialize()
+        private void treeBypass(ushort leaveId, CodeNode huffCode)
+        {
+            if (tree[leaveId].isSymbol())
+                alphabet.Add(tree[leaveId].Character, huffCode);
+            else
+            {
+                treeBypass(tree[leaveId].LeftChild, addCodeBit(huffCode, 0));
+                treeBypass(tree[leaveId].RightChild, addCodeBit(huffCode, 1));
+            }
+        }
+        private CodeNode addCodeBit(CodeNode code, byte bit)
+        {
+            code.lenght++;
+            code.huffCode = (code.huffCode << 1) | bit;
+            return code;
+        }
+        public byte[] serialize()
         {
             byte indexPower = getIndexPower(tree.Count - 1);
             BitWriter br = new BitWriter(indexPower);
@@ -104,16 +145,29 @@ namespace CompressionMethods
                 br.addBits(tree[i].LeftChild, indexPower);
                 br.addBits(tree[i].RightChild, indexPower);
             }
-            br.finalize();
-            return br;
+            return br.getBytes();
+        }
+        public void deserialize(byte[] serializedTree)
+        {
+            BitReader br = new BitReader(serializedTree);
+            int leavesCount = (serializedTree.Length - 1) * 8 / (8 + br.DefaultSize * 2);
+
+            for (short i = 0; i < leavesCount; i++)
+                tree.Add(new Leave(br.readByte(8), br.readShort(), br.readShort()));
+        }
+        public void print()
+        {
+            Console.WriteLine("Tree: {0}", tree.Count);
+            string s = "";
+            for (int i = 0; i < tree.Count; i++)
+                s += tree[i] + " ";
+            Console.WriteLine(s);
         }
         private byte getIndexPower(int s)
         {
             for (byte i = 15; i >= 0; i--)
-            {
                 if ((s & (1 << i)) > 0)
                     return (byte)(i + 1);
-            }
             return 0;
         }
     }

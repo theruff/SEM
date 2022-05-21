@@ -1,42 +1,29 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace CompressionMethods
 {
     class Program
     {   
-        class Encoder {
-            private Tree tree;
-            private Dictionary<byte, string> alphabet;
-            byte[] inBytes;
-            public Encoder(Tree _tree, byte[] _inBytes)
-            {
-                alphabet = _tree.getAlphabet();
-                tree = _tree;
-                inBytes = _inBytes;
-            }
-            public void Encode (string filePath)
-            {
-                BitWriter br = new BitWriter();
-                foreach (byte b in inBytes)
-                    br.addBits(alphabet[b]);
-                br.toFile(filePath);
-            }
-        }
         static void Main(string[] args)
         {
-            string fphamlet = "C:\\TestData\\hamlet.txt"; // file
-            //string fphamlet = "C:\\Users\\ruff\\Desktop\\BMPs\\custom.bmp";
-            FileStream fs = File.OpenRead(fphamlet);
-            byte[] hamletBytes = new byte[fs.Length];
-            fs.Read(hamletBytes, 0, hamletBytes.Length);
-            fs.Close();
+            string sourcePath = "C:\\TestData\\hamlet5.txt"; // file
+            //string sourcePath = "C:\\TestData\\1.txt";
+            //string sourcePath = "C:\\TestData\\DJI_0009_Trim.mp4";
+            //string sourcePath = "C:\\TestData\\notepad.exe";
+            string destPath = "C:\\TestData\\out.haf";
+            
+            if (args.Length != 0)
+            {
+                sourcePath = args[0];
+                destPath = args[1];
+            }
 
-            Tree tr = new Tree(hamletBytes);
-            tr.makeTree();
-            tr.serialize();
-            Encoder enc = new Encoder(tr, hamletBytes);
-            enc.Encode("C:\\TestData\\out.txt");
+            Encoder encoder = new Encoder();
+            encoder.encode(sourcePath, destPath);
+            Decoder decoder = new Decoder();
+            decoder.decode(destPath, "C:\\TestData\\out.txt");
         }
     }
 }
