@@ -7,7 +7,8 @@ namespace CompressionMethods
         private const ushort MAGIC_BYTES = 12345;
         public void encode(string sourcePath, string outPath)
         {
-            byte[] sourceBytes = FileReader.readSourceFile(sourcePath);
+            RLE rle = new RLE();
+            byte[] sourceBytes = rle.encode(FileReader.readSourceFile(sourcePath));
             if (sourceBytes != null)
             {
                 Tree tree = new Tree(sourceBytes);
@@ -54,7 +55,8 @@ namespace CompressionMethods
                     Tree tree = new Tree();
                     tree.deserialize(serializedTree);
                     BitReader decodedData = new BitReader(compressedData);
-                    FileWriter.writeFile(outPath, decodedData.readAll(tree), 0);
+                    RLE rle = new RLE();
+                    FileWriter.writeFile(outPath, rle.decode(decodedData.readAll(tree)), 0);
                 }
             }
         }

@@ -34,6 +34,7 @@ namespace CompressionMethods
                 byteArray.Add(0);
                 int nextByteBitPtr = size - (sizeof(byte) * 8 - bitPtr);
                 byteArray[bytePtr] = (byte)(byteArray[bytePtr] | (byte)(b >> nextByteBitPtr));
+
                 int mask = (2 << nextByteBitPtr) - 1;
                 byteArray[bytePtr + 1] = (byte)(
                     (b & mask) << (sizeof(byte) * 8 - nextByteBitPtr)
@@ -68,7 +69,7 @@ namespace CompressionMethods
             {
                 checkCompatible(size, sizeof(uint));
                 addBits((ushort)(s >> 16), (byte)(size - 16));
-                addBits((ushort)(s & 65535), 16);
+                addBits((ushort)(s & ushort.MaxValue), 16);
             }
         }
         public byte[] getBytes()
