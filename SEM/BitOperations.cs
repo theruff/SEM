@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text;
 
 namespace CompressionMethods
 {
@@ -23,7 +21,7 @@ namespace CompressionMethods
         }
         public void addBits(CodeNode c) {
             if (c.lenght > 0)
-                addBits(c.huffCode, c.lenght);
+                addBits(c.code, c.lenght);
         }
         public void addBits(byte b) => addBits(b, 8);
         public void addBits(byte b, byte size)
@@ -102,10 +100,12 @@ namespace CompressionMethods
         private int lastBits;
         private byte defaultSize;
         private byte[] byteArray;
+        private List<byte> decodedBytes;
 
         public BitReader(byte[] inputBytes)
         {
             byteArray = inputBytes;
+            decodedBytes = new List<byte>();
             defaultSize = (byte)(byteArray[0] >> 3);
             lastBits = byteArray[0] & 0x07;
             bytePtr = 1;
@@ -113,6 +113,7 @@ namespace CompressionMethods
 
         public byte DefaultSize { get => defaultSize; }
         public ushort readShort() => readShort(defaultSize);
+        public uint readInt() => readInt(defaultSize);
         public byte readByte(byte size)
         {
             int mask = (0xff >> bitPtr);
@@ -137,10 +138,19 @@ namespace CompressionMethods
             else
                 return (ushort)(readByte(8) << (size - 8) | readByte((byte)(size - 8)));
         }
+        public uint readInt(byte size)
+        {
+            if (size <= 8)
+                return readByte(size);
+            else if (size <= 16)
+                return readShort(size);
+            else
+                return (uint)(readShort(16) << (size - 16) | readShort((byte)(size - 16)));
+        }
         public byte[] readAll(Tree tree)
         {
             int leavesIndex = 0;
-            List<byte> decodedBytes = new List<byte>();
+            
             while (bytePtr != byteArray.Length)
             {
                 if (bytePtr + 1 == byteArray.Length)
@@ -156,6 +166,22 @@ namespace CompressionMethods
                 }
                 decodedBytes.Add(tree.leaves[leavesIndex].Character);
             }       
+            return decodedBytes.ToArray();
+        }
+        public byte[] readAll(LZW lzw)
+        {
+            uint tmp;
+            while (bytePtr != byteArray.Length)
+            {
+                if (bytePtr + 1 == byteArray.Length)
+                    if (bitPtr == lastBits)
+                        break;
+                tmp = readInt();
+                if (tmp <= byte.MaxValue)
+                {
+
+                }
+            }
             return decodedBytes.ToArray();
         }
     }

@@ -1,10 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Collections.Generic;
 
 namespace CompressionMethods
 {
-    internal class RLE
+    internal class RLE: ICodec
     {
         List<byte> encodedBytes;
         private const byte MARKER_BYTE = 0xff;
@@ -58,16 +56,6 @@ namespace CompressionMethods
             else
                 return genRleCode(bytes[index], index - startIndex + 2);
         }
-        private int escaping()
-        {
-            encodedBytes.AddRange(new byte[]{ MARKER_BYTE, MARKER_BYTE });
-            return 2;
-        }
-        private int repeatByte(byte b)
-        {
-            encodedBytes.AddRange(new byte[] { b, b });
-            return 2;
-        }
         private int genRleCode(byte b, int quant)
         {
             encodedBytes.Add(MARKER_BYTE);
@@ -76,20 +64,37 @@ namespace CompressionMethods
             else if (quant < ushort.MaxValue)
             {
                 encodedBytes.Add(MARKER_SHORT);
-                for (int i = sizeof(ushort); i > 0; i--)
-                    encodedBytes.Add((byte)((quant >> 8 * (i - 1)) & 0xff));
+                toBytes(quant, sizeof(ushort));
             }
             else
             {
                 encodedBytes.Add(MARKER_INT);
-                for (int i = sizeof(int); i > 0; i--)
-                    encodedBytes.Add((byte)((quant >> 8 * (i - 1)) & 0xff));
+                toBytes(quant, sizeof(int));
             }
             encodedBytes.Add(b);
             return quant;
         }
+        private int escaping()
+        {
+            encodedBytes.AddRange(new byte[] { MARKER_BYTE, MARKER_BYTE });
+            return 1;
+        }
+        private int deEscaping()
+        {
+            encodedBytes.Add(MARKER_BYTE);
+            return 2;
+        }
+        private int repeatByte(byte b)
+        {
+            encodedBytes.AddRange(new byte[] { b, b });
+            return 2;
+        }
+        private void toBytes(int quant, int size)
+        {
+            for (int i = size; i > 0; i--)
+                encodedBytes.Add((byte)((quant >> 8 * (i - 1)) & 0xff));
+        }
 
-        // ##################################################################################
         public byte[] decode(byte[] bytes)
         {
             for (int i = 0; i < bytes.Length;)
@@ -104,36 +109,33 @@ namespace CompressionMethods
             }
             return encodedBytes.ToArray();
         }
-
         private int startDeRle(byte[] bytes, int index)
         {
-            int count = 0;
+            //int count = 0;
             switch (bytes[++index])
             {
                 case MARKER_BYTE:
                     return deEscaping();
                 case MARKER_SHORT:
-                    for (int i = 0; i < sizeof(ushort); i++)
-                        count |= bytes[index + i + 1] << (sizeof(ushort) - i - 1) * 8;
-                    return decodeRle(bytes[index +3], count, 5);
+                    return longRle(bytes, index, sizeof(short));
                 case MARKER_INT:
-                    for (int i = 0; i < sizeof(uint); i++)
-                        count |= bytes[index + i + 1] << (sizeof(uint) - i - 1) * 8;
-                    return decodeRle(bytes[index + 3], count, 7);
+                    return longRle(bytes, index, sizeof(int));
                 default:
                     return decodeRle(bytes[index + 1], bytes[index], 3);
             }
-        }
-        private int deEscaping()
-        {
-            encodedBytes.Add(MARKER_BYTE);
-            return 2;
         }
         private int decodeRle(byte b, int count, int addCount)
         {
             for (int i = 0; i < count; i++)
                 encodedBytes.Add(b);
             return addCount;
+        }
+        private int longRle(byte[] bytes, int index, int size)
+        {
+            int count = 0;
+            for (int i = 0; i < size; i++)
+                count |= bytes[index + i + 1] << (size - i - 1) * 8;
+            return decodeRle(bytes[index + size + 1], count, size + 3);
         }
     }
 }

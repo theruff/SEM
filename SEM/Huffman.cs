@@ -1,27 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.Text;
+using System.IO;
 
 namespace CompressionMethods
 {
-    struct CodeNode
-    {
-        public uint huffCode;
-        public byte lenght;
-        public CodeNode(uint _huffCode, byte _length)
-        {
-            this.huffCode = _huffCode;
-            this.lenght = _length;
-        }
-        public override string ToString()
-        {
-            string code = "";
-            for (int i = lenght - 1; i >= 0; i--)
-                code += (huffCode >> i & 1);
-            return code;
-        }
-    }
     class Leave : IComparable<Leave>
     {
         private uint frequency;
@@ -43,7 +25,7 @@ namespace CompressionMethods
         public ushort RightChild { get => rightChild; }
         public byte Character { get => character; }
         public bool isSymbol() => leftChild == rightChild ? true : false;
-        public int CompareTo([AllowNull] Leave other)
+        public int CompareTo(Leave other)
         {
             if (this.frequency < other.frequency)
                 return -1;
@@ -131,7 +113,7 @@ namespace CompressionMethods
         private CodeNode addCodeBit(CodeNode code, byte bit)
         {
             code.lenght++;
-            code.huffCode = (code.huffCode << 1) | bit;
+            code.code = (code.code << 1) | bit;
             return code;
         }
         public byte[] serialize()
@@ -169,6 +151,51 @@ namespace CompressionMethods
                 if ((s & (1 << i)) > 0)
                     return (byte)(i + 1);
             return 0;
+        }
+    }
+    class Huffman : ICodec
+    {
+        BitWriter encodedData;
+        public Huffman()
+        {
+            encodedData = new BitWriter();
+        }
+        public byte[] encode(byte[] bytes)
+        {
+            Tree tree = new Tree(bytes);
+            Dictionary<byte, CodeNode> alphabet = tree.generateAlphabet();
+
+            foreach (byte b in bytes)
+                encodedData.addBits(alphabet[b]);
+            return composeData(encodedData.getBytes(), tree.serialize());
+        }
+        public byte[] decode(byte[] bytes)
+        {
+            Tree tree = new Tree();
+            MemoryStream ms = new MemoryStream(bytes);
+            BinaryReader br = new BinaryReader(ms);
+
+            int dataSize = br.ReadInt32();
+            byte[] compressedData = br.ReadBytes(dataSize);
+            byte[] serializedTree = br.ReadBytes((int)ms.Length - dataSize - sizeof(int));
+
+            tree.deserialize(serializedTree);
+            BitReader decodedData = new BitReader(compressedData);
+            ms.Dispose();
+            br.Dispose();
+            return decodedData.readAll(tree);
+        }
+        private byte[] composeData(byte[] data, byte[] serializedTree)
+        {
+            MemoryStream ms = new MemoryStream();
+            BinaryWriter bw = new BinaryWriter(ms);
+
+            bw.Write(data.Length);
+            bw.Write(data);
+            bw.Write(serializedTree);
+            bw.Flush();
+            
+            return ms.ToArray();
         }
     }
 }
