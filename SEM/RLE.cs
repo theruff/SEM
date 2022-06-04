@@ -111,7 +111,6 @@ namespace CompressionMethods
         }
         private int startDeRle(byte[] bytes, int index)
         {
-            //int count = 0;
             switch (bytes[++index])
             {
                 case MARKER_BYTE:

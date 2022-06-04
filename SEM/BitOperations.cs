@@ -101,6 +101,7 @@ namespace CompressionMethods
         private byte defaultSize;
         private byte[] byteArray;
         private List<byte> decodedBytes;
+        private int count;
 
         public BitReader(byte[] inputBytes)
         {
@@ -109,9 +110,30 @@ namespace CompressionMethods
             defaultSize = (byte)(byteArray[0] >> 3);
             lastBits = byteArray[0] & 0x07;
             bytePtr = 1;
+            bitPtr = 0;
+        }
+        public uint this[int index] {
+            get {
+                if (index > Count - 1)
+                    throw new IndexOutOfRangeException();
+                int tmpBit = bitPtr;
+                int tmpByte = bytePtr;
+                bitPtr = (index * defaultSize % 8);
+                
+                bytePtr = (((defaultSize * index) + 1) / 8) + 1;
+                if (bitPtr == 7)
+                    bytePtr--;
+                uint ret = readInt();
+                this.bytePtr = tmpByte;
+                this.bitPtr = tmpBit;
+                return ret;
+            } 
         }
 
         public byte DefaultSize { get => defaultSize; }
+        public int Count { get => (byteArray.Length - 1) * 8 / defaultSize; }
+        public bool continueReading() => (bytePtr + 1 == byteArray.Length && bitPtr == lastBits) ? false : true;
+        
         public ushort readShort() => readShort(defaultSize);
         public uint readInt() => readInt(defaultSize);
         public byte readByte(byte size)
@@ -183,6 +205,27 @@ namespace CompressionMethods
                 }
             }
             return decodedBytes.ToArray();
+        }
+        public override string ToString()
+        {
+            string result = "";
+            if (defaultSize > 0)
+            {
+                for (int i = 0; i < Count; i++)
+                    result += this[i].ToString() + " | ";
+            }
+            /*
+            else
+            {
+                foreach (byte b in byteArray)
+                {
+                    for (int i = 7; i >= 0; i--)
+                        result += 1 & (b >> i);
+                    result += " | ";
+                }
+            }
+            */
+            return result;
         }
     }
 }

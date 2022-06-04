@@ -119,15 +119,15 @@ namespace CompressionMethods
         public byte[] serialize()
         {
             byte indexPower = getIndexPower(tree.Count - 1);
-            BitWriter br = new BitWriter(indexPower);
+            BitWriter bw = new BitWriter(indexPower);
 
             for (short i = 0; i < tree.Count; i++)
             {
-                br.addBits(tree[i].Character);
-                br.addBits(tree[i].LeftChild, indexPower);
-                br.addBits(tree[i].RightChild, indexPower);
+                bw.addBits(tree[i].Character);
+                bw.addBits(tree[i].LeftChild, indexPower);
+                bw.addBits(tree[i].RightChild, indexPower);
             }
-            return br.getBytes();
+            return bw.getBytes();
         }
         public void deserialize(byte[] serializedTree)
         {
